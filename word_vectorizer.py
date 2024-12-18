@@ -1,65 +1,69 @@
-import argparse
-import concurrent.futures
-import multiprocessing
+import os.path
+from arguments import Arguments
+import util
 
+def count_words(file: str):
+    count = 0
+    word = False
+    for ch in file:
+        if not ch.isspace():
+            if not word:
+                word = True
+                count += 1
+        else:
+            word = False
+    return count
 
-def read_chunks(path, chunk_size=8192):
-    with open(path, 'rb') as file:
-        while chunk := file.read(chunk_size):
-            yield chunk
+def count_characters(file):
+    return len(file)
 
-def process_chunk(chunk, leftover_parts):
-    chunk = chunk.decode()
+def count_lines(file):
+    count = 0
+    for ch in file:
+        if ch == "\n":
+            count += 1
+    if file and file[-1] != "\n":
+        count += 1
+    return count
 
-    words = chunk.split()
-        
-    # Separated at the end of a complete word
-    if not chunk[-1].isspace():
-        leftover_parts.append(words.pop())
+def count_bytes(path):
+    return os.path.getsize(path)
 
-    return len(words)
-
-def parallel_calculation(args, core_thread_multiplier=1):
-    total_word_count = 0
-    leftover_parts = []
-
-    cores = multiprocessing.cpu_count()
-    threads = cores * core_thread_multiplier
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = []
-        for chunk in read_chunks(args.file_path):
-            futures.append(executor.submit(process_chunk, chunk, leftover_parts))
-
-        for future in concurrent.futures.as_completed(futures):
-            total_word_count += future.result()
-
-    print(leftover_parts)
-    if leftover_parts:
-        total_word_count += len(leftover_parts)
-
-    return total_word_count
-
-def parse_arguments(args):
-    path = args.file_path
-    wc = parallel_calculation(args, 1)
-    print(wc)
+def get_size(unit: str, path):
+    size_in_bytes = count_bytes(path)
+    units = {
+        "KB": size_in_bytes / 1024,
+        "MB": size_in_bytes / (1024 ** 2),
+        "GB": size_in_bytes / (1024 ** 3)
+    }
+    return f"{units[unit]:.2f} {unit}"
 
 def main():
-    parser = argparse.ArgumentParser()
+    args = Arguments()
+    args.parse()
 
-    parser.add_argument('-f', '--file-path', help='Specify file path')
-    parser.add_argument('-c', '--char-count', action='store_true', help='Count characters')
-    parser.add_argument('-w', '--word-count', action='store_true', help='Count words')
-    parser.add_argument('-l', '--line-count', action='store_true', help='Count lines')
-    parser.add_argument('-b', '--byte-count', action='store_true', help='Count bytes')
-    parser.add_argument('-k', '--kilobyte', action='store_true', help='Measure in kilobytes')
-    parser.add_argument('-m', '--megabyte', action='store_true', help='Measure in megabytes')
-    parser.add_argument('-g', '--gigabyte', action='store_true', help='Measure in gigabytes')
+    if args.word_count:
+        file = util.read_file(args.file_path)
+        count = count_words(file)
+        print(count)
 
-    args = parser.parse_args()
-    parse_arguments(args)
+    if args.line_count:
+        file = util.read_file(args.file_path)
+        count = count_lines(file)
+        print(count)
 
+    if args.char_count:
+        file = util.read_file(args.file_path)
+        count = count_characters(file)
+        print(count)
+
+    if args.byte_count:
+        count = count_bytes(args.file_path)
+        print(count)
+
+    if args.size_unit:
+        size = get_size(args.size_unit, args.file_path)
+        print(size)
 
 if __name__ == "__main__":
     main()
